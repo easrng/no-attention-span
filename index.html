@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>no attention span</title>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      /* CSS files add styling rules to your content */
+
+      body {
+        font-family: Arial, sans-serif;
+        margin: 2em;
+        background: #000;
+      }
+
+      h1 {
+        font-style: italic;
+        color: #373fff;
+      }
+
+      #playerwrap {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+        display: flex;
+        overflow: hidden;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+
+      #playerwrap iframe {
+        width: calc(200vw + 1200px);
+        height: 100%;
+        position: absolute;
+      }
+
+      #captionwrap {
+        position: absolute;
+        top: 35px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #000;
+        text-align: center;
+        filter: url(#round);
+        font-family: "Proxima Nova";
+        font-weight: 600;
+        line-height: 1.35;
+        width: calc(100% - 20px);
+        font-size: 20px;
+      }
+      #caption {
+        background: #fff;
+        padding: 5px;
+        user-select: none;
+      }
+      @font-face {
+        font-family: "Proxima Nova";
+        src: url("https://cdn.jsdelivr.net/gh/elliakou/proxima-nova-web-fonts@master/fonts/Mark Simonson - Proxima Nova Semibold-webfont.woff2")
+          format("woff2");
+        font-weight: 600;
+        font-style: normal;
+      }
+    </style>
+    <script src="https://www.youtube.com/iframe_api" defer></script>
+  </head>
+  <body>
+    <div id="playerwrap" tabindex="0" aria-hidden="true">
+      <div id="player"></div>
+    </div>
+    <svg
+      style="width: 100%; height: 100%; position: absolute; top: 0; left: 0"
+      viewBox="0 0 270 480"
+    >
+      <defs>
+        <filter style="color-interpolation-filters: sRGB" id="round">
+          <feGaussianBlur
+            id="feGaussianBlur238"
+            stdDeviation="3"
+          ></feGaussianBlur>
+          <feComponentTransfer id="feComponentTransfer360" result="result1">
+            <feFuncR id="feFuncR362" type="discrete" tableValues="1"></feFuncR>
+            <feFuncG id="feFuncG364" type="discrete" tableValues="1"></feFuncG>
+            <feFuncB id="feFuncB366" type="discrete" tableValues="1"></feFuncB>
+            <feFuncA
+              id="feFuncA368"
+              type="gamma"
+              tableValues="0.5"
+              exponent="0.75"
+              amplitude="10"
+              offset="-2"
+            ></feFuncA>
+          </feComponentTransfer>
+          <feComponentTransfer id="feComponentTransfer551" result="result2">
+            <feFuncR id="feFuncR553" type="identity"></feFuncR>
+            <feFuncG id="feFuncG555" type="identity"></feFuncG>
+            <feFuncB id="feFuncB557" type="identity"></feFuncB>
+            <feFuncA
+              id="feFuncA559"
+              type="gamma"
+              offset="0"
+              exponent="10"
+              amplitude="10"
+            ></feFuncA>
+          </feComponentTransfer>
+          <feComposite
+            in2="result2"
+            id="feComposite370"
+            in="SourceGraphic"
+          ></feComposite>
+        </filter>
+      </defs>
+      <foreignObject
+        xmlns="http://www.w3.org/2000/svg"
+        style="x: 0; y: 0; width: 100%; height: 100%; filter: url(#round)"
+      >
+        <div xmlns="http://www.w3.org/1999/xhtml" id="captionwrap">
+          <span id="caption">Loading...</span>
+        </div>
+      </foreignObject>
+    </svg>
+    <script type="module">
+      import pLimit from "https://esm.sh/p-limit@4.0.0";
+      const limit = pLimit(1);
+      function splitIntoChunks(inputString) {
+        const words = inputString.split(/\s+/);
+        const chunks = [];
+        let buffer = "";
+        let bufferLength = 0;
+
+        for (const word of words) {
+          const wordLength = new TextEncoder().encode(word).length;
+          if (bufferLength + wordLength > 150) {
+            chunks.push(buffer);
+            bufferLength = wordLength;
+            buffer = word;
+          } else {
+            buffer += (buffer.length > 0 ? " " : "") + word;
+            bufferLength += (buffer.length > 0 ? 1 : 0) + wordLength;
+          }
+        }
+
+        if (buffer.length > 0) {
+          chunks.push(buffer);
+        }
+
+        return chunks;
+      }
+      async function tikTokTTS(text) {
+        const a = new Audio();
+        a.src =
+          "data:audio/mpeg;base64," +
+          (
+            await (
+              await fetch("https://tiktok-tts.weilnet.workers.dev/api/generation", {
+                credentials: "omit",
+                headers: {
+                  "User-Agent":
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/111.0",
+                  Accept: "*/*",
+                  "Accept-Language": "en-US,en;q=0.5",
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  text: text,
+                  voice: "en_us_001",
+                }),
+                method: "POST",
+                mode: "cors",
+              })
+            ).json()
+          ).data;
+        await new Promise((cb, ecb) => {
+          a.oncanplay = cb;
+          a.onerror = ecb;
+        });
+        return a;
+      }
+      const player = new Promise((cb) => {
+        let player_;
+        window.onYouTubeIframeAPIReady = function onYouTubeIframeAPIReady() {
+          player_ = new window.YT.Player("player", {
+            videoId: "hs7Z0JUgDeA",
+            playerVars: {
+              autoplay: 0,
+              loop: 1,
+              controls: 0,
+              showinfo: 0,
+              start: 1 * 60 + 13,
+              end: (1 * 60 + 9) * 60,
+              playlist: "hs7Z0JUgDeA",
+            },
+            events: {
+              onReady: onPlayerReady,
+            },
+          });
+        };
+
+        function onPlayerReady(event) {
+          cb(player_);
+        }
+      });
+      const caption = document.querySelector("#caption");
+      async function loadSay(text) {
+        const audio = await tikTokTTS(text);
+        return async () => {
+          caption.textContent = text;
+          audio.play();
+          await new Promise((cb) => (audio.onended = cb));
+        };
+      }
+      async function bgm() {
+        const audio = new Audio();
+        audio.src = "https://cdn.pixabay.com/audio/2021/11/01/audio_67c5757bac.mp3";
+        audio.volume = 0.125;
+        audio.play();
+      }
+      async function readAll(text) {
+        const chunks = splitIntoChunks(text);
+        const loadedChunks = chunks.map((chunk) => limit(() => loadSay(chunk)));
+        for (let say of loadedChunks) {
+          console.log(await (await say)());
+        }
+      }
+      try {
+        const url = decodeURIComponent(location.search.slice(1));
+        if (!url) throw new Error("");
+        const text = await (await fetch(url)).text();
+        caption.style.cursor = "pointer";
+        caption.textContent = "Click to play!";
+        caption.addEventListener(
+          "click",
+          async function () {
+            //await bgm();
+            caption.style.cursor = "";
+            (await player).setVolume(18);
+            (await player).playVideo();
+            readAll(text);
+          },
+          { once: true }
+        );
+      } catch (e) {
+        caption.textContent = "Error loading text.";
+      }
+    </script>
+  </body>
+</html>
